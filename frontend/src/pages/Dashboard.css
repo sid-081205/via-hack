@@ -1,0 +1,219 @@
+.dash {
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* header */
+.dash-header {
+  background: var(--paper);
+  border-bottom: var(--border-thin);
+  flex-shrink: 0;
+  z-index: 20;
+}
+
+.dash-header__inner {
+  max-width: 1480px;
+  margin: 0 auto;
+  padding: 12px 24px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.dash-header__brand {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-width: 0;
+}
+
+.dash-header__divider {
+  color: var(--sage-light);
+  font-size: 18px;
+}
+
+.dash-header__trip-name {
+  font-family: var(--font-display);
+  font-size: 18px;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+  color: var(--ink);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.dash-header__dates {
+  color: var(--sage);
+  font-style: italic;
+  font-size: 14px;
+}
+
+.dash-header__right {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-shrink: 0;
+}
+
+.dash-header__back {
+  font-size: 13px;
+  color: var(--sage);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  text-decoration-thickness: 1px;
+}
+
+.dash-header__back:hover { color: var(--accent-deep); }
+
+.dash-header__user {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 12px 4px 4px;
+  background: var(--paper-warm);
+  border: 1px solid var(--ink);
+  border-radius: var(--radius-pill);
+}
+
+.dash-header__avatar {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: var(--accent);
+  border: 1.5px solid var(--ink);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--ink);
+}
+
+.dash-header__user-name {
+  font-size: 13px;
+  color: var(--ink);
+  font-weight: 500;
+}
+
+.dash-header__settings {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  border: 1.5px solid var(--ink);
+  background: var(--paper);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--ink);
+  transition: background 0.15s ease, transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.dash-header__settings:hover {
+  background: var(--soft-green);
+  transform: translate(-1px, -1px);
+  box-shadow: 2px 2px 0 var(--ink);
+}
+
+/* main 3-column layout · TRIP · CHAT · BOOKING */
+.dash-main {
+  flex: 1;
+  display: grid;
+  /* trip workspace gets enough room for the side-by-side plan + docs;
+     chat is wide for breathing room; booking stays compact */
+  grid-template-columns: 1.5fr 1.3fr 340px;
+  max-width: 1480px;
+  margin: 0 auto;
+  width: 100%;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.dash-col {
+  border-right: var(--border-thin);
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.dash-col:last-child { border-right: none; }
+
+.dash-col--trip {
+  /* the only column where the inner content scrolls page-style */
+  overflow-y: auto;
+}
+
+.dash-col--chat {
+  /* must NOT be overflow:auto — chat panel manages its own internal scroll
+     so the composer can pin to the bottom of the column */
+  overflow: hidden;
+}
+
+.dash-col--booking {
+  overflow-y: auto;
+}
+
+@media (max-width: 1280px) {
+  .dash-main {
+    grid-template-columns: 1.5fr 1.3fr 300px;
+  }
+}
+
+@media (max-width: 1080px) {
+  .dash-main {
+    grid-template-columns: 1.5fr 1.3fr;
+  }
+  .dash-col--booking { display: none; }
+}
+
+@media (max-width: 800px) {
+  .dash-main { grid-template-columns: 1fr; }
+  .dash-col {
+    display: none;
+    border-right: none;
+  }
+  .dash-col--active { display: flex; }
+}
+
+/* tabs (mobile) */
+.dash-tabs {
+  display: none;
+  background: var(--paper);
+  border-top: var(--border-thin);
+  padding: 8px 12px;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.dash-tabs__btn {
+  flex: 1;
+  padding: 10px;
+  font-size: 13px;
+  border: 1.5px solid var(--ink);
+  border-radius: var(--radius-pill);
+  background: transparent;
+  color: var(--ink);
+  position: relative;
+}
+
+.dash-tabs__btn--active { background: var(--accent); }
+
+.dash-tabs__badge {
+  position: absolute;
+  top: 6px;
+  right: 12px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--status-needs-user);
+  border: 1.5px solid var(--ink);
+}
+
+@media (max-width: 800px) {
+  .dash-tabs { display: flex; }
+}

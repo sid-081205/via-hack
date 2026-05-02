@@ -1,0 +1,74 @@
+[
+  {
+    "id": "ht001",
+    "name": "Bairro Alto Hotel",
+    "stars": 5,
+    "area": "Bairro Alto",
+    "price_per_night_gbp": 420,
+    "price_tier": "luxury",
+    "description": "One of Lisbon's finest boutique hotels, tucked into the vibrant Bairro Alto neighbourhood. Stunning rooftop terrace with panoramic city views. Intimate, design-led rooms with Portuguese craftsmanship throughout.",
+    "highlights": ["Rooftop terrace", "Historic neighbourhood", "Boutique", "Walking distance to Chiado"],
+    "vibe": "romantic, luxury, boutique",
+    "image_url": "https://images.unsplash.com/photo-1566073771259-6a8506099945?w=400&h=250&fit=crop"
+  },
+  {
+    "id": "ht002",
+    "name": "Memmo Alfama",
+    "stars": 4,
+    "area": "Alfama",
+    "price_per_night_gbp": 280,
+    "price_tier": "mid",
+    "description": "A hidden gem perched on the edge of Alfama, Lisbon's oldest neighbourhood. Spectacular infinity pool overlooking the Tagus river and castle. Contemporary design meeting historic surroundings — feel like a local.",
+    "highlights": ["Infinity pool", "Castle views", "Alfama neighbourhood", "Rooftop bar"],
+    "vibe": "romantic, boutique, views",
+    "image_url": "https://images.unsplash.com/photo-1520250497591-112f2f40a3f4?w=400&h=250&fit=crop"
+  },
+  {
+    "id": "ht003",
+    "name": "1908 Lisboa Hotel",
+    "stars": 4,
+    "area": "Intendente",
+    "price_per_night_gbp": 195,
+    "price_tier": "mid",
+    "description": "Set in a beautifully restored 1908 building in the up-and-coming Intendente neighbourhood. Original tile work, high ceilings, and a buzzy courtyard. More affordable but full of character.",
+    "highlights": ["Historic building", "Original azulejos", "Courtyard", "Emerging neighbourhood"],
+    "vibe": "character, historic, value",
+    "image_url": "https://images.unsplash.com/photo-1551882547-ff40c63fe5fa?w=400&h=250&fit=crop"
+  },
+  {
+    "id": "ht004",
+    "name": "LX Boutique Hotel",
+    "stars": 3,
+    "area": "Cais do Sodré",
+    "price_per_night_gbp": 110,
+    "price_tier": "budget",
+    "description": "A stylish budget-friendly boutique hotel in the lively Cais do Sodré district. Each floor themed around Portuguese poetry. Walking distance to Time Out Market and the Tagus riverfront. Great value for the location.",
+    "highlights": ["Time Out Market nearby", "Tagus views from top floors", "Themed design", "Nightlife district"],
+    "vibe": "budget, lively, central, character",
+    "image_url": "https://images.unsplash.com/photo-1590490360182-c33d57733427?w=400&h=250&fit=crop"
+  },
+  {
+    "id": "ht005",
+    "name": "The Lumiares",
+    "stars": 5,
+    "area": "Bairro Alto",
+    "price_per_night_gbp": 310,
+    "price_tier": "luxury",
+    "description": "All-suite aparthotel in a converted 18th-century palace in Bairro Alto. Each suite has a full kitchen and feels like a private Lisbon apartment. Great for longer stays or couples who want extra space.",
+    "highlights": ["All suites", "Palace building", "Kitchen in rooms", "Bairro Alto location"],
+    "vibe": "romantic, apartment-style, historic",
+    "image_url": "https://images.unsplash.com/photo-1618773928121-c32242e63f39?w=400&h=250&fit=crop"
+  },
+  {
+    "id": "ht006",
+    "name": "Lisbon Calling Hostel",
+    "stars": 2,
+    "area": "Baixa",
+    "price_per_night_gbp": 65,
+    "price_tier": "budget",
+    "description": "Clean, social, and incredibly affordable private rooms in the heart of Baixa. Not a hostel dorm — proper private rooms with ensuite bathrooms. Perfect for budget travellers who want a central location without the price tag.",
+    "highlights": ["Central Baixa location", "Private rooms available", "Social atmosphere", "Rooftop terrace"],
+    "vibe": "budget, social, central, no-frills",
+    "image_url": "https://images.unsplash.com/photo-1555854877-bab0e564b8d5?w=400&h=250&fit=crop"
+  }
+]

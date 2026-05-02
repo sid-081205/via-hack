@@ -1,0 +1,1037 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Via — Personal Travel Agent</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #0b0e14;
+      --surface: #141820;
+      --surface2: #1c2130;
+      --surface3: #242a3a;
+      --border: #2a3040;
+      --accent: #6c8cff;
+      --accent-dim: #4a6ad4;
+      --accent-glow: rgba(108,140,255,0.15);
+      --green: #34d399;
+      --yellow: #fbbf24;
+      --red: #f87171;
+      --orange: #fb923c;
+      --text: #e8ecf4;
+      --muted: #7a8499;
+      --user-bubble: #1e2a4a;
+      --assistant-bubble: #161c28;
+      --radius: 14px;
+      --radius-sm: 10px;
+      --font: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--font);
+      height: 100vh;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* ── Header ── */
+    header {
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      padding: 12px 24px;
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      flex-shrink: 0;
+    }
+    .logo {
+      font-size: 24px;
+      font-weight: 800;
+      letter-spacing: -1px;
+      background: linear-gradient(135deg, #6c8cff, #a78bfa, #f472b6);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+    .header-subtitle {
+      font-size: 12px;
+      color: var(--muted);
+      letter-spacing: 0.5px;
+    }
+    .phase-badge {
+      margin-left: auto;
+      background: var(--accent-glow);
+      border: 1px solid rgba(108,140,255,0.3);
+      color: var(--accent);
+      font-size: 11px;
+      font-weight: 600;
+      padding: 4px 12px;
+      border-radius: 20px;
+      text-transform: lowercase;
+    }
+    .status-dot {
+      width: 8px; height: 8px;
+      border-radius: 50%;
+      background: var(--green);
+      box-shadow: 0 0 8px var(--green);
+      animation: pulse 2s infinite;
+    }
+    @keyframes pulse { 0%,100% { opacity:1; } 50% { opacity:0.4; } }
+
+    /* ── Main 3-panel layout ── */
+    main {
+      flex: 1;
+      display: grid;
+      grid-template-columns: 280px 1fr 300px;
+      height: calc(100vh - 53px);
+      overflow: hidden;
+    }
+
+    /* ── Left: Live Agents Panel ── */
+    .agents-panel {
+      background: var(--surface);
+      border-right: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+    .panel-header {
+      padding: 14px 16px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-shrink: 0;
+    }
+    .panel-title {
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--text);
+      text-transform: lowercase;
+    }
+    .panel-badge {
+      font-size: 10px;
+      font-weight: 600;
+      padding: 2px 8px;
+      border-radius: 20px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    .badge-live {
+      background: rgba(52,211,153,0.12);
+      border: 1px solid rgba(52,211,153,0.3);
+      color: var(--green);
+    }
+
+    .agents-list {
+      flex: 1;
+      overflow-y: auto;
+      padding: 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    .agents-list::-webkit-scrollbar { width: 4px; }
+    .agents-list::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+
+    .agents-empty {
+      text-align: center;
+      padding: 40px 16px;
+      color: var(--muted);
+      font-size: 12px;
+    }
+    .agents-empty .icon { font-size: 28px; margin-bottom: 8px; }
+
+    .agent-card {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      overflow: hidden;
+      animation: slideIn 0.3s ease;
+    }
+    @keyframes slideIn { from { opacity:0; transform:translateY(10px); } to { opacity:1; transform:translateY(0); } }
+
+    .agent-card-header {
+      padding: 10px 12px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      border-bottom: 1px solid var(--border);
+    }
+    .agent-icon { font-size: 16px; }
+    .agent-name {
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--text);
+      flex: 1;
+    }
+    .agent-status {
+      font-size: 10px;
+      font-weight: 600;
+      padding: 2px 7px;
+      border-radius: 12px;
+    }
+    .agent-status.running {
+      background: rgba(108,140,255,0.12);
+      color: var(--accent);
+      animation: glowPulse 1.5s infinite;
+    }
+    .agent-status.done {
+      background: rgba(52,211,153,0.12);
+      color: var(--green);
+    }
+    @keyframes glowPulse { 0%,100% { box-shadow:none; } 50% { box-shadow: 0 0 8px rgba(108,140,255,0.3); } }
+
+    .agent-query {
+      padding: 6px 12px;
+      font-size: 11px;
+      color: var(--muted);
+      border-bottom: 1px solid var(--border);
+    }
+
+    .agent-results {
+      padding: 8px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .agent-result-item {
+      background: var(--surface3);
+      border-radius: 8px;
+      padding: 8px 10px;
+      animation: fadeIn 0.4s ease;
+      cursor: pointer;
+      transition: border-color 0.2s;
+      border: 1px solid transparent;
+    }
+    .agent-result-item:hover { border-color: var(--accent); }
+    @keyframes fadeIn { from { opacity:0; } to { opacity:1; } }
+
+    .result-name {
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--text);
+      margin-bottom: 2px;
+    }
+    .result-desc {
+      font-size: 11px;
+      color: var(--muted);
+      line-height: 1.3;
+    }
+    .result-price {
+      font-size: 11px;
+      font-weight: 700;
+      color: var(--accent);
+      margin-top: 3px;
+    }
+    .result-actions {
+      display: flex;
+      gap: 6px;
+      margin-top: 6px;
+    }
+    .result-btn {
+      font-size: 10px;
+      font-weight: 600;
+      padding: 3px 8px;
+      border-radius: 6px;
+      border: none;
+      cursor: pointer;
+      transition: opacity 0.2s;
+    }
+    .result-btn:hover { opacity: 0.8; }
+    .result-btn-select {
+      background: var(--accent);
+      color: white;
+    }
+    .result-btn-book {
+      background: rgba(52,211,153,0.15);
+      color: var(--green);
+      border: 1px solid rgba(52,211,153,0.3);
+    }
+
+    .agent-spinner {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 12px;
+      font-size: 11px;
+      color: var(--muted);
+    }
+    .spinner-dot {
+      width: 6px; height: 6px;
+      border-radius: 50%;
+      background: var(--accent);
+      animation: spinBounce 1.2s infinite;
+    }
+    .spinner-dot:nth-child(2) { animation-delay: 0.2s; }
+    .spinner-dot:nth-child(3) { animation-delay: 0.4s; }
+    @keyframes spinBounce { 0%,60%,100% { transform:translateY(0); opacity:0.4; } 30% { transform:translateY(-4px); opacity:1; } }
+
+    /* ── Center: Chat ── */
+    .chat-panel {
+      display: flex;
+      flex-direction: column;
+      height: 100%;
+      border-right: 1px solid var(--border);
+    }
+
+    .messages {
+      flex: 1;
+      overflow-y: auto;
+      padding: 20px 24px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      scroll-behavior: smooth;
+    }
+    .messages::-webkit-scrollbar { width: 4px; }
+    .messages::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+
+    .bubble-row {
+      display: flex;
+      gap: 10px;
+      align-items: flex-end;
+    }
+    .bubble-row.user { flex-direction: row-reverse; }
+
+    .avatar {
+      width: 30px; height: 30px;
+      border-radius: 50%;
+      flex-shrink: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 12px;
+      font-weight: 700;
+    }
+    .avatar.via { background: linear-gradient(135deg, #6c8cff, #a78bfa); color: white; }
+    .avatar.user { background: var(--user-bubble); color: var(--accent); border: 1px solid var(--border); }
+
+    .bubble-col { display: flex; flex-direction: column; max-width: 75%; }
+    .bubble {
+      padding: 12px 16px;
+      border-radius: var(--radius);
+      font-size: 14px;
+      line-height: 1.6;
+    }
+    .bubble.via {
+      background: var(--assistant-bubble);
+      border: 1px solid var(--border);
+      border-bottom-left-radius: 4px;
+    }
+    .bubble.user {
+      background: var(--user-bubble);
+      border: 1px solid rgba(108,140,255,0.3);
+      border-bottom-right-radius: 4px;
+    }
+    .bubble-time {
+      font-size: 10px;
+      color: var(--muted);
+      margin-top: 4px;
+    }
+    .bubble-row.user .bubble-time { text-align: right; }
+
+    .welcome {
+      text-align: center;
+      padding: 60px 20px 20px;
+      color: var(--muted);
+    }
+    .welcome h2 {
+      font-size: 22px;
+      color: var(--text);
+      margin-bottom: 8px;
+      font-weight: 700;
+      text-transform: lowercase;
+    }
+    .welcome p {
+      font-size: 14px;
+      line-height: 1.6;
+      max-width: 400px;
+      margin: 0 auto;
+      text-transform: lowercase;
+    }
+
+    /* ── Destination suggestion cards (with images) ── */
+    .destination-cards {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 12px;
+      padding: 8px 0;
+      max-width: 100%;
+    }
+    .destination-card {
+      border-radius: var(--radius);
+      overflow: hidden;
+      cursor: pointer;
+      position: relative;
+      height: 140px;
+      transition: transform 0.2s, box-shadow 0.2s;
+      border: 1px solid var(--border);
+    }
+    .destination-card:hover {
+      transform: translateY(-3px);
+      box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+    }
+    .destination-card img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+    .destination-card-overlay {
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      padding: 12px;
+      background: linear-gradient(transparent, rgba(0,0,0,0.85));
+    }
+    .destination-card-name {
+      font-size: 15px;
+      font-weight: 700;
+      color: white;
+    }
+    .destination-card-tagline {
+      font-size: 11px;
+      color: rgba(255,255,255,0.7);
+      margin-top: 2px;
+    }
+
+    /* ── Generic suggestion cards (hotels/flights inline) ── */
+    .suggestion-cards {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      padding: 4px 0;
+    }
+    .suggestion-card {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 12px;
+      cursor: pointer;
+      transition: border-color 0.2s, transform 0.15s;
+    }
+    .suggestion-card:hover { border-color: var(--accent); transform: translateX(3px); }
+
+    /* ── Typing indicator ── */
+    .typing-row {
+      display: none;
+      padding: 0 24px 8px;
+      gap: 10px;
+      align-items: flex-end;
+    }
+    .typing-row.visible { display: flex; }
+    .typing-indicator {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 14px;
+      background: var(--assistant-bubble);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      border-bottom-left-radius: 4px;
+    }
+    .typing-dots { display: flex; gap: 4px; }
+    .typing-dots span {
+      width: 5px; height: 5px;
+      border-radius: 50%;
+      background: var(--muted);
+      animation: bounce 1.2s infinite;
+    }
+    .typing-dots span:nth-child(2) { animation-delay: 0.2s; }
+    .typing-dots span:nth-child(3) { animation-delay: 0.4s; }
+    @keyframes bounce { 0%,60%,100% { transform:translateY(0); } 30% { transform:translateY(-4px); } }
+
+    /* ── Input area ── */
+    .input-area {
+      padding: 14px 24px;
+      background: var(--surface);
+      border-top: 1px solid var(--border);
+      display: flex;
+      gap: 10px;
+      align-items: flex-end;
+      flex-shrink: 0;
+    }
+    .input-wrapper {
+      flex: 1;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      display: flex;
+      align-items: flex-end;
+      padding: 2px 4px 2px 14px;
+      transition: border-color 0.2s;
+    }
+    .input-wrapper:focus-within { border-color: var(--accent); }
+    #message-input {
+      flex: 1;
+      background: transparent;
+      border: none;
+      outline: none;
+      color: var(--text);
+      font-family: var(--font);
+      font-size: 14px;
+      padding: 10px 0;
+      resize: none;
+      max-height: 100px;
+      line-height: 1.5;
+    }
+    #message-input::placeholder { color: var(--muted); }
+    #send-btn {
+      background: var(--accent);
+      border: none;
+      border-radius: 10px;
+      width: 38px; height: 38px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: background 0.2s, transform 0.1s;
+      flex-shrink: 0;
+    }
+    #send-btn:hover { background: var(--accent-dim); }
+    #send-btn:active { transform: scale(0.95); }
+    #send-btn:disabled { opacity: 0.3; cursor: not-allowed; }
+    #send-btn svg { fill: white; }
+
+    /* ── Right: Travel Plan Panel ── */
+    .plan-panel {
+      background: var(--surface);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+    .plan-list {
+      flex: 1;
+      overflow-y: auto;
+      padding: 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .plan-list::-webkit-scrollbar { width: 4px; }
+    .plan-list::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+
+    .plan-empty {
+      text-align: center;
+      padding: 40px 16px;
+      color: var(--muted);
+      font-size: 12px;
+    }
+    .plan-empty .icon { font-size: 28px; margin-bottom: 8px; }
+
+    .plan-item {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 10px 12px;
+      animation: slideIn 0.3s ease;
+    }
+    .plan-item-header {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .plan-item-icon { font-size: 16px; }
+    .plan-item-name {
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--text);
+      flex: 1;
+    }
+    .plan-item-status {
+      font-size: 9px;
+      font-weight: 600;
+      padding: 2px 6px;
+      border-radius: 10px;
+      text-transform: uppercase;
+    }
+    .plan-item-status.planned {
+      background: rgba(251,191,36,0.12);
+      color: var(--yellow);
+    }
+    .plan-item-status.booked {
+      background: rgba(52,211,153,0.12);
+      color: var(--green);
+    }
+    .plan-item-details {
+      font-size: 11px;
+      color: var(--muted);
+      margin-top: 4px;
+      line-height: 1.4;
+    }
+    .plan-item-actions {
+      margin-top: 6px;
+      display: flex;
+      gap: 6px;
+    }
+    .plan-book-link {
+      font-size: 10px;
+      font-weight: 600;
+      color: var(--accent);
+      text-decoration: none;
+      padding: 2px 8px;
+      border-radius: 6px;
+      background: var(--accent-glow);
+      border: 1px solid rgba(108,140,255,0.2);
+      transition: background 0.2s;
+    }
+    .plan-book-link:hover { background: rgba(108,140,255,0.25); }
+
+    /* Quick suggestion chips */
+    .suggestions {
+      padding: 8px 24px 0;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+    .chip {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      padding: 6px 14px;
+      font-size: 12px;
+      color: var(--muted);
+      cursor: pointer;
+      transition: border-color 0.2s, color 0.2s;
+    }
+    .chip:hover { border-color: var(--accent); color: var(--text); }
+
+    @media (max-width: 1024px) {
+      main { grid-template-columns: 1fr; }
+      .agents-panel, .plan-panel { display: none; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="logo">via</div>
+    <div class="header-subtitle">your personal travel agent</div>
+    <div class="phase-badge" id="phase-badge">discovery</div>
+    <div class="status-dot" title="connected"></div>
+  </header>
+
+  <main>
+    <!-- Left: Live Agent Panels -->
+    <div class="agents-panel">
+      <div class="panel-header">
+        <div class="panel-title">live agents</div>
+        <div class="panel-badge badge-live">live</div>
+      </div>
+      <div class="agents-list" id="agents-list">
+        <div class="agents-empty">
+          <div class="icon">🤖</div>
+          specialist agents will appear here as they research your trip
+        </div>
+      </div>
+    </div>
+
+    <!-- Center: Chat -->
+    <div class="chat-panel">
+      <div class="messages" id="messages">
+        <div class="welcome" id="welcome">
+          <h2>hey alex 👋</h2>
+          <p>i'm via, your personal travel agent. tell me where you'd like to go or just describe the vibe — i'll handle the rest.</p>
+        </div>
+      </div>
+
+      <div class="typing-row" id="typing-row">
+        <div class="avatar via">v</div>
+        <div class="typing-indicator">
+          <div class="typing-dots"><span></span><span></span><span></span></div>
+          <span style="font-size:11px; color: var(--muted);">via is thinking...</span>
+        </div>
+      </div>
+
+      <div class="suggestions" id="suggestions">
+        <div class="chip" onclick="sendSuggestion(this)">i wanna go somewhere beachy next weekend</div>
+        <div class="chip" onclick="sendSuggestion(this)">romantic weekend getaway ideas</div>
+        <div class="chip" onclick="sendSuggestion(this)">help me plan my lisbon trip</div>
+      </div>
+
+      <div class="input-area">
+        <div class="input-wrapper">
+          <textarea id="message-input" rows="1" placeholder="tell via where you want to go..."></textarea>
+        </div>
+        <button id="send-btn" onclick="sendMessage()" title="send (enter)">
+          <svg width="16" height="16" viewBox="0 0 24 24"><path d="M2 21l21-9L2 3v7l15 2-15 2v7z"/></svg>
+        </button>
+      </div>
+    </div>
+
+    <!-- Right: Travel Plan -->
+    <div class="plan-panel">
+      <div class="panel-header">
+        <div class="panel-title">travel plan</div>
+        <span id="plan-count" style="margin-left:auto;font-size:11px;color:var(--muted);"></span>
+      </div>
+      <div class="plan-list" id="plan-list">
+        <div class="plan-empty">
+          <div class="icon">🗺️</div>
+          your trip plan will build up here as you select flights, hotels, and activities
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <script>
+    const TRIP_ID = 'trip_lisbon';
+    const USER_ID = 'alex';
+    const BASE = '';
+
+    const messagesEl = document.getElementById('messages');
+    const inputEl = document.getElementById('message-input');
+    const sendBtn = document.getElementById('send-btn');
+    const typingRow = document.getElementById('typing-row');
+    const suggestionsEl = document.getElementById('suggestions');
+    const welcome = document.getElementById('welcome');
+    const phaseBadge = document.getElementById('phase-badge');
+    const agentsList = document.getElementById('agents-list');
+    const planList = document.getElementById('plan-list');
+    const planCount = document.getElementById('plan-count');
+
+    let sending = false;
+    let currentPhase = 'discovery';
+    let agentPollInterval = null;
+    let planPollInterval = null;
+    let knownAgentTasks = {};
+
+    // ── Input handling ──
+    inputEl.addEventListener('input', () => {
+      inputEl.style.height = 'auto';
+      inputEl.style.height = Math.min(inputEl.scrollHeight, 100) + 'px';
+    });
+    inputEl.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); }
+    });
+
+    function sendSuggestion(el) {
+      inputEl.value = el.textContent;
+      suggestionsEl.style.display = 'none';
+      sendMessage();
+    }
+
+    // ── Helpers ──
+    function escapeHtml(t) {
+      return String(t || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+    }
+    function formatTime() {
+      return new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    }
+
+    // ── Chat message rendering ──
+    function appendMessage(role, content) {
+      if (welcome) welcome.remove();
+      const row = document.createElement('div');
+      row.className = `bubble-row ${role}`;
+      const avatarClass = role === 'user' ? 'user' : 'via';
+      const initial = role === 'user' ? 'a' : 'v';
+      row.innerHTML = `
+        <div class="avatar ${avatarClass}">${initial}</div>
+        <div class="bubble-col">
+          <div class="bubble ${avatarClass}">${escapeHtml(content).replace(/\n/g,'<br>')}</div>
+          <div class="bubble-time">${formatTime()}</div>
+        </div>`;
+      messagesEl.appendChild(row);
+      messagesEl.scrollTop = messagesEl.scrollHeight;
+    }
+
+    // ── Destination cards with images ──
+    function renderDestinationCards(suggestions) {
+      if (!suggestions || !suggestions.length) return;
+      // Check if these are destination suggestions (have image_url and tagline)
+      const isDestinations = suggestions[0] && suggestions[0].image_url && suggestions[0].name;
+      if (!isDestinations) {
+        renderGenericSuggestions(suggestions);
+        return;
+      }
+
+      const row = document.createElement('div');
+      row.className = 'bubble-row';
+      row.innerHTML = `
+        <div class="avatar via">v</div>
+        <div class="bubble-col" style="max-width:90%">
+          <div class="destination-cards">
+            ${suggestions.map(s => `
+              <div class="destination-card" onclick="selectDestination('${escapeHtml(s.name)}')">
+                <img src="${escapeHtml(s.image_url)}" alt="${escapeHtml(s.name)}" loading="lazy" />
+                <div class="destination-card-overlay">
+                  <div class="destination-card-name">${escapeHtml(s.name)}</div>
+                  <div class="destination-card-tagline">${escapeHtml(s.tagline || s.description || '')}</div>
+                </div>
+              </div>
+            `).join('')}
+          </div>
+        </div>`;
+      messagesEl.appendChild(row);
+      messagesEl.scrollTop = messagesEl.scrollHeight;
+    }
+
+    function renderGenericSuggestions(suggestions) {
+      if (!suggestions || !suggestions.length) return;
+      const row = document.createElement('div');
+      row.className = 'bubble-row';
+      row.innerHTML = `
+        <div class="avatar via">v</div>
+        <div class="bubble-col">
+          <div class="suggestion-cards">
+            ${suggestions.map(s => {
+              const name = s.name || s.airline || '';
+              const desc = s.description || s.vibe || '';
+              const price = s.price || s.price_range || '';
+              return `<div class="suggestion-card" onclick="selectSuggestion('${escapeHtml(name)}')">
+                <div style="font-size:13px;font-weight:600;color:var(--text);">${escapeHtml(name)}</div>
+                <div style="font-size:11px;color:var(--muted);margin-top:2px;">${escapeHtml(desc)}</div>
+                ${price ? `<div style="font-size:11px;font-weight:700;color:var(--accent);margin-top:3px;">${escapeHtml(price)}</div>` : ''}
+              </div>`;
+            }).join('')}
+          </div>
+        </div>`;
+      messagesEl.appendChild(row);
+      messagesEl.scrollTop = messagesEl.scrollHeight;
+    }
+
+    function selectDestination(name) {
+      inputEl.value = `i'd like to go to ${name.toLowerCase()}`;
+      sendMessage();
+    }
+
+    function selectSuggestion(name) {
+      inputEl.value = `i'll go with ${name}`;
+      sendMessage();
+    }
+
+    function updatePhase(phase) {
+      currentPhase = phase;
+      phaseBadge.textContent = phase;
+    }
+
+    // ── Send message ──
+    async function sendMessage() {
+      const text = inputEl.value.trim();
+      if (!text || sending) return;
+
+      sending = true;
+      sendBtn.disabled = true;
+      inputEl.value = '';
+      inputEl.style.height = 'auto';
+      suggestionsEl.style.display = 'none';
+
+      appendMessage('user', text);
+      typingRow.classList.add('visible');
+      messagesEl.scrollTop = messagesEl.scrollHeight;
+
+      try {
+        const res = await fetch(`${BASE}/trips/${TRIP_ID}/messages`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ user_id: USER_ID, text }),
+        });
+
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({ detail: 'unknown error' }));
+          throw new Error(err.detail || `http ${res.status}`);
+        }
+
+        const data = await res.json();
+        typingRow.classList.remove('visible');
+
+        appendMessage('assistant', data.reply);
+
+        if (data.suggestions && data.suggestions.length) {
+          renderDestinationCards(data.suggestions);
+        }
+
+        if (data.phase) updatePhase(data.phase);
+
+        // If agents were deployed, start polling
+        if (data.deploy_agents && data.deploy_agents.length) {
+          startAgentPolling();
+        }
+
+      } catch (err) {
+        typingRow.classList.remove('visible');
+        appendMessage('assistant', `sorry, something went wrong: ${err.message}`);
+      } finally {
+        sending = false;
+        sendBtn.disabled = false;
+        inputEl.focus();
+      }
+    }
+
+    // ── Agent panel rendering ──
+    const AGENT_ICONS = { hotel: '🏨', flight: '✈️', itinerary: '🍽️' };
+    const AGENT_NAMES = { hotel: 'hotel agent', flight: 'flight agent', itinerary: 'itinerary agent' };
+
+    function renderAgentPanels(tasks) {
+      if (!tasks || !tasks.length) {
+        agentsList.innerHTML = `<div class="agents-empty"><div class="icon">🤖</div>specialist agents will appear here as they research your trip</div>`;
+        return;
+      }
+
+      agentsList.innerHTML = tasks.map(task => {
+        const icon = AGENT_ICONS[task.agent_type] || '🔍';
+        const name = AGENT_NAMES[task.agent_type] || task.agent_type;
+        const isRunning = task.status === 'running';
+        const results = task.results || [];
+
+        return `
+          <div class="agent-card">
+            <div class="agent-card-header">
+              <span class="agent-icon">${icon}</span>
+              <span class="agent-name">${name}</span>
+              <span class="agent-status ${task.status}">${task.status}</span>
+            </div>
+            <div class="agent-query">${escapeHtml(task.query)}</div>
+            <div class="agent-results">
+              ${results.map((r, idx) => `
+                <div class="agent-result-item">
+                  <div class="result-name">${escapeHtml(r.name)}</div>
+                  <div class="result-desc">${escapeHtml(r.description)}</div>
+                  <div class="result-price">${escapeHtml(r.price)}</div>
+                  <div class="result-actions">
+                    <button class="result-btn result-btn-select" data-agent="${task.agent_type}" data-idx="${idx}" data-task="${task._id}" onclick="handleAddToPlan(this)">add to plan →</button>
+                    ${r.booking_url ? `<button class="result-btn result-btn-book" onclick="window.open('${escapeHtml(r.booking_url)}','_blank')">book ↗</button>` : ''}
+                  </div>
+                </div>
+              `).join('')}
+              ${isRunning ? `
+                <div class="agent-spinner">
+                  <span class="spinner-dot"></span>
+                  <span class="spinner-dot"></span>
+                  <span class="spinner-dot"></span>
+                  <span>searching...</span>
+                </div>` : ''}
+            </div>
+          </div>`;
+      }).join('');
+    }
+
+    // ── Travel plan rendering ──
+    const PLAN_ICONS = { hotel: '🏨', flight: '✈️', restaurant: '🍽️', activity: '🏖️', transport: '🚇' };
+
+    function renderTravelPlan(items) {
+      if (!items || !items.length) {
+        planList.innerHTML = `<div class="plan-empty"><div class="icon">🗺️</div>your trip plan will build up here as you select flights, hotels, and activities</div>`;
+        planCount.textContent = '';
+        return;
+      }
+
+      planCount.textContent = `${items.length} item${items.length !== 1 ? 's' : ''}`;
+      planList.innerHTML = items.map(item => {
+        const icon = PLAN_ICONS[item.item_type] || '📌';
+        const details = item.details || {};
+        let detailStr = '';
+        if (item.item_type === 'flight') {
+          detailStr = `${details.origin || ''} → ${details.dest || ''} · ${(details.departure || '').slice(11,16)}`;
+        } else if (item.item_type === 'hotel') {
+          detailStr = `${details.area || ''} · £${details.price_per_night_gbp || '?'}/night`;
+        } else if (item.item_type === 'restaurant') {
+          detailStr = `${details.cuisine || ''} · ${details.area || ''} · ${details.time_slot || ''}`;
+        } else {
+          detailStr = item.day || '';
+        }
+
+        return `
+          <div class="plan-item">
+            <div class="plan-item-header">
+              <span class="plan-item-icon">${icon}</span>
+              <span class="plan-item-name">${escapeHtml(item.name)}</span>
+              <span class="plan-item-status ${item.status}">${item.status}</span>
+            </div>
+            ${detailStr ? `<div class="plan-item-details">${escapeHtml(detailStr)}</div>` : ''}
+            ${item.booking_url ? `
+              <div class="plan-item-actions">
+                <a class="plan-book-link" href="${escapeHtml(item.booking_url)}" target="_blank" rel="noopener">open booking page ↗</a>
+              </div>` : ''}
+          </div>`;
+      }).join('');
+    }
+
+    // ── Add to travel plan ──
+    let _cachedAgentTasks = [];
+
+    async function handleAddToPlan(btn) {
+      const agentType = btn.dataset.agent;
+      const taskId = btn.dataset.task;
+      const idx = parseInt(btn.dataset.idx);
+
+      // Find result from cached tasks
+      const task = _cachedAgentTasks.find(t => t._id === taskId);
+      if (!task || !task.results[idx]) return;
+
+      const r = task.results[idx];
+      const itemType = agentType === 'itinerary' ? 'restaurant' : agentType;
+
+      btn.textContent = 'adding...';
+      btn.disabled = true;
+
+      const body = {
+        item_type: itemType,
+        name: r.name,
+        details: r.details || {},
+        booking_url: r.booking_url || '',
+      };
+
+      try {
+        await fetch(`${BASE}/trips/${TRIP_ID}/travel-plan`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+        });
+        btn.textContent = 'added ✓';
+        btn.style.background = 'rgba(52,211,153,0.15)';
+        btn.style.color = 'var(--green)';
+        refreshPlan();
+      } catch (e) {
+        btn.textContent = 'failed';
+        btn.disabled = false;
+        console.error('Failed to add to plan:', e);
+      }
+    }
+
+    // ── Polling ──
+    async function refreshAgents() {
+      try {
+        const res = await fetch(`${BASE}/trips/${TRIP_ID}/agents`);
+        if (!res.ok) return;
+        const tasks = await res.json();
+        _cachedAgentTasks = tasks;
+        renderAgentPanels(tasks);
+      } catch (e) {}
+    }
+
+    async function refreshPlan() {
+      try {
+        const res = await fetch(`${BASE}/trips/${TRIP_ID}/travel-plan`);
+        if (!res.ok) return;
+        const items = await res.json();
+        renderTravelPlan(items);
+      } catch (e) {}
+    }
+
+    function startAgentPolling() {
+      if (!agentPollInterval) {
+        agentPollInterval = setInterval(refreshAgents, 2000);
+      }
+    }
+
+    function startPlanPolling() {
+      if (!planPollInterval) {
+        planPollInterval = setInterval(refreshPlan, 3000);
+      }
+    }
+
+    // Start polling on load
+    startAgentPolling();
+    startPlanPolling();
+    refreshAgents();
+    refreshPlan();
+    inputEl.focus();
+  </script>
+</body>
+</html>

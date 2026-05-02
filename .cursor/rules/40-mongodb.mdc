@@ -1,0 +1,170 @@
+---
+description: MongoDB schema, queries, and Vector Search rules
+globs: backend/**/*.py
+alwaysApply: false
+---
+
+# MongoDB rules
+
+## Schema philosophy
+
+MongoDB is the document database — *use the document model.* Don't normalize trip data into separate collections. The point of choosing Mongo (and the judges' expectation) is that a trip's flights, stays, and itinerary are nested arrays inside the trip doc.
+
+```
+✓ Good
+{
+  "_id": "trip_lisbon",
+  "user_id": "alex",
+  "destination": "Lisbon",
+  "flights": [{...}, {...}],
+  "stays":   [{...}],
+  "itinerary": [{"day": 1, "items": [...]}]
+}
+
+✗ Bad — anti-pattern for this project
+{
+  "trips": {...},
+  "flight_bookings": [{trip_id: ..., ...}],
+  "hotel_bookings": [{trip_id: ..., ...}],
+}
+```
+
+Exception: `todos` is a separate collection because it's append-heavy and queried independently. Same logic for `messages` and `memory_facts`.
+
+## Connection — the only correct pattern
+
+```python
+# db.py
+from motor.motor_asyncio import AsyncIOMotorClient
+from app.config import settings
+
+client = AsyncIOMotorClient(settings.MONGODB_URI)
+db = client[settings.MONGODB_DB]
+
+users_col = db.users
+trips_col = db.trips
+todos_col = db.todos
+messages_col = db.messages
+memory_facts_col = db.memory_facts
+
+VECTOR_INDEX_NAME = "memory_vector_index"
+```
+
+Never instantiate a `MongoClient` or `AsyncIOMotorClient` outside `db.py`. One client per process.
+
+## Vector Search — the trap-laden API
+
+Three things go wrong constantly. Drill them.
+
+### Trap 1: numCandidates equal to limit
+```python
+# ✗ BAD — silent recall failure
+{"$vectorSearch": {..., "numCandidates": 5, "limit": 5}}
+
+# ✓ GOOD
+{"$vectorSearch": {..., "numCandidates": 50, "limit": 5}}
+```
+Rule: `numCandidates >= 10 * limit`.
+
+### Trap 2: Forgetting the user_id filter
+Without `filter`, vector search returns memories from every user.
+```python
+{"$vectorSearch": {
+    ...,
+    "filter": {"user_id": user_id}    # ALWAYS include
+}}
+```
+The Atlas Vector Search index must declare `user_id` as a filter field for this to work. The setup guide already does.
+
+### Trap 3: Wrong input_type on Voyage embeddings
+Voyage embeddings are asymmetric. Stored facts use `"document"`, search queries use `"query"`.
+
+```python
+# Storing
+emb = await voyage.aembed([fact], model="voyage-3.5", input_type="document")
+
+# Searching
+emb = await voyage.aembed([query], model="voyage-3.5", input_type="query")
+```
+
+## Status field discipline
+
+`todos.status`: `pending | running | needs_user | done | failed`.
+`trips.status`: `planning | confirmed`.
+
+Never other values. Define as Python `Literal`. No magic numbers, no booleans masquerading as status.
+
+## Update patterns
+
+Always `$set`, never replace:
+
+```python
+# ✓ GOOD
+await todos_col.update_one(
+    {"_id": todo_id},
+    {"$set": {
+        "status": "running",
+        "sub_status": "Searching flights...",
+        "updated_at": datetime.utcnow(),
+    }}
+)
+
+# ✗ BAD — overwrites everything else
+await todos_col.replace_one({"_id": todo_id}, new_doc)
+```
+
+For appending to arrays (e.g. adding a flight to a trip), use `$push`:
+
+```python
+await trips_col.update_one(
+    {"_id": trip_id},
+    {"$push": {"flights": new_flight_doc}}
+)
+```
+
+## Indexes (in seed.py)
+
+```python
+async def ensure_indexes():
+    await todos_col.create_index([("trip_id", 1), ("updated_at", -1)])
+    await messages_col.create_index([("trip_id", 1), ("ts", 1)])
+    await memory_facts_col.create_index([("user_id", 1)])
+    # The vector index is created via the Atlas UI, not here.
+```
+
+The Atlas Vector Search index `memory_vector_index` is created once via the Atlas UI. Not a regular Mongo index — `create_index` won't make it.
+
+## Async aggregation idiom
+
+```python
+results = []
+async for doc in collection.aggregate(pipeline):
+    results.append(doc)
+
+# Or:
+docs = [d async for d in collection.aggregate(pipeline)]
+```
+
+Don't `await collection.aggregate(...)` — `aggregate` returns a cursor, not a coroutine.
+
+## Seed data — required for the demo
+
+`seed.py` runs once and populates:
+- 1 user (`alex`)
+- 1 active trip (`trip_lisbon`, May 9–11) with placeholder structure
+- 5–8 memory facts about Alex with embeddings, e.g.:
+  - "Alex prefers aisle seats on flights longer than 3 hours."
+  - "Alex's partner is Sam, vegetarian, no shellfish."
+  - "Alex hates early-morning departures before 8am."
+  - "Alex enjoys hole-in-the-wall restaurants over fine dining."
+  - "Alex is trying to drink less red wine."
+
+These fire during the demo. Make them count.
+
+## What NOT to do
+
+- ❌ `pymongo` (sync) anywhere in async code.
+- ❌ Aggregations in tight loops. Fetch once.
+- ❌ Embeddings as base64 strings. Native arrays of floats.
+- ❌ Add fields to `users` for auth. No auth.
+- ❌ New collections without updating the rules + data model section in `00-project-context.mdc`.

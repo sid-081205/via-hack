@@ -1,0 +1,74 @@
+---
+description: Via project context — always include
+globs:
+alwaysApply: true
+---
+
+# Via — project context
+
+Via is a personal travel agent built for the MongoDB Agentic Evolution Hackathon (London, May 2). Three surfaces — Next.js web app, in-browser voice, and a real phone number — all backed by the same multi-agent system.
+
+## Stack (non-negotiable)
+
+- **Backend:** Python 3.11+, FastAPI, async throughout (`motor` for Mongo, never blocking `pymongo`).
+- **Agents:** Async orchestration + **adaptive retrieval** (multi-source: vector memory, structured trip/message slices, JSON corpora) feeding a Planner + parallel specialists (Flight, Stay, Itinerary, Memory). No graph framework — plain `async` pipeline + `asyncio.gather`.
+- **Database:** MongoDB Atlas. Use `langchain-mongodb` where it helps (e.g. LangChain chat models, optional vector helpers). Persist conversation and trip state in collections — not a separate graph checkpointer package.
+- **Embeddings:** Voyage AI via the `voyageai` package. MongoDB's native embedding provider (acquired by MongoDB), so this aligns with the judging story. Default `voyage-3.5`, 1024 dim, cosine.
+- **LLM:** Google Gemini 2.5 Flash via `langchain-google-genai`. Free tier is sufficient for the hackathon.
+- **Frontend:** Next.js 15 App Router, Tailwind, shadcn/ui. Polling every 2s, no websockets in Phase 1.
+- **Voice (Phase 2+):** LiveKit agents framework + ElevenLabs TTS.
+- **Hosting:** Backend on a single AWS EC2 with Docker (required for finalist eligibility). Frontend on Vercel.
+
+## Architecture
+
+```
+User → Next.js (chat + trip + booking) → FastAPI → orchestrator
+                                              ↓
+   adaptive_retrieve → planner → [flight, stay, itinerary parallel] → synthesize → extract_memory
+        ↑ (multi-source: vector + docs + corpora)   ↓                        ↓
+   memory_facts / trips / data/*.json          todos                  memory_facts
+                                                (live UI)               (writes)
+                                                      ↓
+                                               MongoDB Atlas
+```
+
+## The 5 collections
+
+- `users` — profile. Hardcode `alex` for the demo, no auth.
+- `trips` — embeds flights, stays, itinerary as nested arrays, and optional **`trip_documents`** (visa checklists, confirmation notes, insurance reminders, etc.) the agent or user attaches to the itinerary. Document model is the point — do not normalize.
+- `todos` — first-class collection driving the live UI. Every status transition (`pending → running → needs_user → done`) is a Mongo update. UI polls this collection.
+- `messages` — conversation per trip.
+- `memory_facts` — long-term semantic memory with Voyage embeddings. Atlas Vector Search index `memory_vector_index` on `embedding` (1024 dim, cosine, with `user_id` as filter).
+
+## Booking model — IMPORTANT
+
+Via does NOT pretend to book. It generates a `booking_url` (deep link to airline/hotel/Booking.com) and the user clicks through. After booking externally, the user marks "I booked it" in the UI. **Never invent fake confirmation numbers, fake PNRs, or fake reservation IDs anywhere in the codebase.** The demo's credibility depends on this.
+
+## Hardcoded data sources (deliberate scope cut)
+
+- **Flights:** hardcoded JSON in `agents/data/flights.json`. Booking URLs are constructed Skyscanner deep links (no API).
+- **Hotels:** hardcoded JSON in `agents/data/hotels.json`, ~6 well-known Lisbon hotels with descriptions. Booking URLs are Booking.com search URLs.
+- **Restaurants:** hardcoded JSON in `agents/data/restaurants.json`, with descriptions used for semantic matching against user prefs. Booking URLs are Google Maps search URLs.
+
+Do NOT integrate Amadeus, Booking.com API, or Google Places API. They look impressive but eat hours and add zero to the demo. The agentic story is about *how Via reasons over the data*, not where the data comes from.
+
+## The agentic story (memorize this — it's the judges' rubric)
+
+The hackathon explicitly asks for **integrations, memory systems, and self-evolution**. Via hits all three:
+
+1. **Integrations** — **Adaptive retrieval** across MongoDB (vector + structured documents) and specialist corpora, plus multi-agent execution: planner + 3 parallel specialists. The live to-do list makes orchestration visible.
+2. **Memory systems** — `memory_facts` with Atlas Vector Search, combined with **retrieval that adapts** queries, chunking, candidate counts, and result ordering each turn; recent `messages` / `trips` slices for grounded short-term context.
+3. **Self-evolution** — MemoryAgent extracts new facts from each conversation, embeds via Voyage, stores back; subsequent turns retrieve better context. The agent demonstrably knows more after the conversation than before.
+
+Every architectural decision should answer "does this strengthen one of these three?" If not, cut it.
+
+## Hackathon constraints — read before generating code
+
+- **Time-boxed.** Every additional dependency, abstraction, or "let me add a class" is suspect.
+- **Phase order is sacred.** Phase 1 = web chat + multi-agent + todos + booking handoff. Phase 2 = voice. Phase 3 = phone. Don't suggest Phase 2 work while Phase 1 is incomplete.
+- **No real bookings, payments, auth, multi-user, native mobile, calendar integration.** If unsure, default to no.
+- **Demo-driven.** Every feature must answer "how does this look in the 90-second demo?"
+
+## When uncertain
+
+Ask the human. Do not invent API endpoints, environment variables, or collection schemas that aren't already in the codebase or these rules. If you need to add one, propose it and wait.

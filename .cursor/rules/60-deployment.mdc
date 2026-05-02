@@ -1,0 +1,128 @@
+---
+description: Deployment, Docker, AWS, environment management
+globs: Dockerfile,docker-compose.yml,*.yml,*.yaml,deploy/**,.github/**
+alwaysApply: false
+---
+
+# Deployment rules
+
+## The deployment stack — keep it boring
+
+- **Frontend:** Vercel. Connect GitHub, set `NEXT_PUBLIC_API_BASE` to the EC2 backend URL, deploys on push to `main`.
+- **Backend:** Single AWS EC2 (`t3.small`), Docker container, port 8000. Required for finalist eligibility — but the bar is "running on AWS," not "AWS-architected."
+- **Database:** MongoDB Atlas (hackathon-provided cluster).
+
+## What NOT to do
+
+- ❌ Kubernetes, EKS, ECS, Fargate. Massive overkill for one container.
+- ❌ AWS Lambda. Cold starts kill voice latency, and multi-step retrieval + parallel specialists need a warm long-lived process.
+- ❌ Terraform, CDK, Pulumi, CloudFormation. Click around the AWS Console.
+- ❌ Multi-stage CI/CD. `git pull && docker compose up -d --build` on EC2 is fine.
+- ❌ HTTPS via ACM + ALB. For demo, plain HTTP from EC2 public IP works. If Vercel insists on HTTPS for the API, use Caddy on the EC2 — one-line auto-TLS — or a free Cloudflare tunnel.
+
+## Backend Dockerfile
+
+```dockerfile
+FROM python:3.11-slim
+WORKDIR /app
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+COPY app ./app
+EXPOSE 8000
+
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+```
+
+Don't multi-stage build. Don't optimize layer caching beyond `requirements.txt` first. Image will be ~600MB. Nobody cares.
+
+## docker-compose for local dev
+
+```yaml
+services:
+  backend:
+    build: ./backend
+    ports:
+      - "8000:8000"
+    env_file:
+      - ./backend/.env
+    volumes:
+      - ./backend/app:/app/app    # hot reload
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+```
+
+No Mongo container — Atlas is cloud. No Redis. No Nginx.
+
+## EC2 setup checklist (~30 min)
+
+1. Launch `t3.small` Amazon Linux 2023, allow inbound 22 (SSH from your IP) and 8000 (anywhere).
+2. SSH in. Install Docker: `sudo dnf install -y docker && sudo systemctl start docker && sudo usermod -aG docker ec2-user`.
+3. Install docker-compose.
+4. Clone repo, create `.env` from `.env.example`, fill keys.
+5. `docker compose up -d --build`.
+6. Test: `curl http://<ec2-public-ip>:8000/health`. Should return `{"ok": true}`.
+
+## Environment variable management
+
+- `.env.example` committed. Lists all required vars with empty values + one-line comments.
+- `.env` is gitignored. Each environment (local, EC2) has its own.
+- Frontend env vars in Vercel project settings, not `.env`. Browser-used vars MUST start with `NEXT_PUBLIC_`.
+- Never log env vars. Never include in error responses. Never paste in Discord/screenshots.
+
+## Vercel setup
+
+1. Connect repo, point at `frontend/` directory.
+2. Set `NEXT_PUBLIC_API_BASE=http://<ec2-public-ip>:8000` in env vars.
+3. Deploy.
+4. Test deployed URL from a phone browser to confirm cross-origin reachability.
+
+If CORS errors hit:
+
+```python
+from fastapi.middleware.cors import CORSMiddleware
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],   # demo only — fine for hackathon
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+```
+
+## Deploy timing
+
+- **Backend on EC2 by mid-Phase 1**, not at the end. Catch deploy bugs early.
+- **First deploy at end of Phase 1.** Smoke test `/health` from a different network.
+- Frontend on Vercel deploys on every push — automatic.
+
+## Demo-day notes
+
+- Have BOTH `localhost` AND deployed URL working. Venue WiFi unreliable to AWS → fall back to local. Laptop dies → deployed URL saves you.
+- Tether to phone hotspot if venue WiFi is bad — better latency to AWS than congested venue WiFi.
+- SSH tab open with `docker logs -f`. If something breaks during demo, you can see it.
+
+## .gitignore
+
+```
+# python
+__pycache__/
+*.pyc
+.venv/
+.env
+
+# node
+node_modules/
+.next/
+out/
+
+# misc
+.DS_Store
+*.log
+```
+
+Never commit `.env`. If you accidentally do, rotate keys — don't try to "remove from git history" under deadline.

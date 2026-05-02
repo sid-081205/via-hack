@@ -1,0 +1,158 @@
+---
+description: Next.js / React / Tailwind frontend conventions
+globs: frontend/**/*.{ts,tsx,js,jsx,css},*.{ts,tsx}
+alwaysApply: false
+---
+
+# Frontend rules
+
+## Project layout
+
+```
+frontend/
+  app/
+    layout.tsx
+    page.tsx               # redirects to /trips/trip_lisbon for the demo
+    trips/[id]/page.tsx    # main 3-column screen
+    api/                   # Next.js API routes (proxy to FastAPI backend)
+  components/
+    chat-panel.tsx
+    trip-workspace.tsx
+    todo-card.tsx
+    booking-pane.tsx
+    booking-card.tsx
+    voice-button.tsx       # Phase 2
+  lib/
+    api.ts                 # typed fetch wrappers
+    types.ts               # mirrors backend Pydantic models
+    polling.ts             # poll-every-2s hook
+  styles/globals.css
+  package.json
+```
+
+## Stack rules
+
+- **Next.js 15 App Router.** Server components by default. `"use client"` only for hooks/browser APIs.
+- **Tailwind + shadcn/ui.** No Material, no Chakra, no other UI lib.
+- **TypeScript strict mode.** No `any`. Reach for `unknown` or define real types.
+- **`fetch` + React Query (`@tanstack/react-query`).** `refetchInterval` for polling.
+- **Polling, not websockets.** UI polls `/trips/:id/todos` every 2s. Phase 1 doesn't justify SSE.
+
+## Layout: 3 columns on desktop
+
+≥ 1024px:
+
+```
+┌──────────────────────────────────────────────────────────┐
+│ Header: trip name + user name (top right)                │
+├────────────┬───────────────────────┬──────────────────────┤
+│ Chat       │ Trip workspace        │ Booking pane         │
+│ (~30%)     │ (~40%)                │ (~30%)               │
+│            │                       │                      │
+│ messages   │ todo list             │ pending booking      │
+│ + input    │ + trip cards          │ cards w/ "Open" btn  │
+└────────────┴───────────────────────┴──────────────────────┘
+```
+
+Below 1024px: tabs at the bottom (Chat / Trip / Bookings). Default Chat.
+
+## Component patterns
+
+- Functional, named exports. No default exports except Next.js page/layout files.
+- Files cap at ~150 lines. Split if longer.
+- State: `useState` local, React Query for server state. No Redux/Zustand.
+- No prop drilling beyond 2 levels.
+
+## Polling hook
+
+```ts
+// lib/polling.ts
+import { useQuery } from "@tanstack/react-query";
+
+export function useTodos(tripId: string) {
+  return useQuery({
+    queryKey: ["todos", tripId],
+    queryFn: () => fetchTodos(tripId),
+    refetchInterval: 2000,
+    refetchIntervalInBackground: false,
+  });
+}
+```
+
+Same shape for `useTrip(tripId)` (5s interval is fine).
+
+## Todo card — the demo's hero element
+
+The single most-watched UI element in the demo. Spend polish budget here.
+
+A todo card shows:
+- Status icon (animated for `running`)
+- Text of the todo
+- Sub-status line in muted color (e.g. "FlightAgent · Searching options...")
+- For `running`: subtle pulse animation
+- For `needs_user`: prominent CTA highlight
+- For `done`: collapsed, checkmark
+- "✨ Used: 'Alex prefers morning departures'" badge when `memory_facts_used` is non-empty
+- Smooth transitions between status states
+
+```tsx
+const statusIcon = {
+  pending: <Clock className="text-muted" />,
+  running: <Loader2 className="animate-spin text-blue-500" />,
+  needs_user: <AlertCircle className="text-amber-500" />,
+  done: <Check className="text-green-500" />,
+  failed: <X className="text-red-500" />,
+}[todo.status];
+```
+
+## Booking pane — side-by-side browser feel
+
+Major travel sites block iframe embedding via `X-Frame-Options`. Don't iframe Booking.com — it won't work. The "side-by-side browser" is a UX illusion:
+
+- Right pane shows browser-chrome frame: fake URL bar with destination URL, favicon, "Open in new tab →" button.
+- Click → `window.open(booking_url, "_blank", "noopener,noreferrer")`.
+- After click: pane switches to "We've opened the booking page in a new tab — finish there and come back" with a big "I booked it" button.
+- "I booked it" → `POST /todos/:id/confirm` → todo card moves to confirmed section.
+
+Never `<iframe src={external_url}>` with a real travel domain. Silently broken.
+
+## API client
+
+```ts
+// lib/api.ts
+const API_BASE = process.env.NEXT_PUBLIC_API_BASE ?? "http://localhost:8000";
+
+export async function fetchTodos(tripId: string): Promise<Todo[]> {
+  const res = await fetch(`${API_BASE}/trips/${tripId}/todos`);
+  if (!res.ok) throw new Error(`Failed: ${res.status}`);
+  return res.json();
+}
+```
+
+Types in `lib/types.ts` mirror backend Pydantic models. Keep in sync manually.
+
+## Styling rules
+
+- Tailwind utility classes inline. No CSS modules.
+- shadcn's `cn()` helper for conditional classes.
+- Palette: neutral grays + one accent (blue or amber). No rainbow.
+- Spacing: `space-y-*`, `gap-*` over manual margins.
+- No custom fonts. System stack is fine.
+
+## Loading / error / empty states
+
+Every fetch needs three states. The demo will not look professional if a panel goes blank.
+
+- Loading: skeleton, not spinner, when layout is known
+- Error: small inline message + retry button, not a toast
+- Empty: friendly placeholder ("Via will show booking links here")
+
+## What NOT to add
+
+- ❌ Auth / login. User hardcoded as `alex` server-side.
+- ❌ Dark mode toggle. Pick light, ship.
+- ❌ Heavy animations beyond simple transitions.
+- ❌ shadcn components you don't need.
+- ❌ Storybook, testing libs, e2e tests.
+- ❌ Custom design system. Tailwind + shadcn IS the design system.
+- ❌ RSC for data that polls. Polling = client component.

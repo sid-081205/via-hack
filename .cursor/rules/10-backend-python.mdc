@@ -1,0 +1,124 @@
+---
+description: Python / FastAPI backend conventions
+globs: backend/**/*.py,*.py
+alwaysApply: false
+---
+
+# Python / FastAPI backend rules
+
+## Project layout
+
+```
+backend/
+  app/
+    main.py              # FastAPI app + router includes + CORS + /health
+    config.py            # Pydantic Settings, loads .env
+    db.py                # Motor client + collection accessors + index name constants
+    routers/
+      trips.py           # /trips, /trips/:id
+      messages.py        # /trips/:id/messages
+      todos.py           # /trips/:id/todos, /todos/:id/confirm
+      livekit.py         # /livekit/token (Phase 2)
+    agents/
+      orchestrator.py    # process_user_turn: retrieve → plan → specialists → synthesize
+      retrieval.py       # adaptive multi-source retrieval + rerank pack
+      planner.py
+      flight_agent.py
+      stay_agent.py
+      itinerary_agent.py
+      memory_agent.py
+      tools/             # tool functions
+      data/              # hardcoded JSON: flights.json, hotels.json, restaurants.json
+    models.py            # Pydantic schemas (API + agent state)
+    seed.py              # one-shot script to seed Alex + Lisbon trip + memory facts
+  requirements.txt
+  Dockerfile
+  .env.example
+```
+
+## Async, always
+
+- Use `motor.motor_asyncio.AsyncIOMotorClient`, never blocking `pymongo` inside request handlers.
+- Mark every router function `async def`.
+- Tool functions called from the orchestrator / specialists that touch Mongo must be `async`.
+- LLM calls via `await llm.ainvoke(...)`, not `llm.invoke(...)`.
+- Never call `asyncio.run()` inside FastAPI request scope. For parallel agent work, use `asyncio.gather`.
+
+## Pydantic models everywhere
+
+Define API request/response shapes as Pydantic v2 models in `models.py`. Don't return raw dicts.
+
+```python
+from pydantic import BaseModel, Field
+from typing import Literal
+
+class TodoStatus(BaseModel):
+    id: str = Field(alias="_id")
+    trip_id: str
+    text: str
+    status: Literal["pending", "running", "needs_user", "done", "failed"]
+    agent: str
+    sub_status: str | None = None
+    memory_facts_used: list[str] = []
+    result: dict | None = None
+
+    class Config:
+        populate_by_name = True
+```
+
+Use `Literal` for enum-like fields. Never plain strings for status.
+
+## LLM client setup
+
+```python
+from langchain_google_genai import ChatGoogleGenerativeAI
+from app.config import settings
+
+llm = ChatGoogleGenerativeAI(
+    model=settings.LLM_MODEL,         # gemini-2.5-flash
+    google_api_key=settings.GOOGLE_API_KEY,
+    temperature=0,
+)
+```
+
+For structured output (planner outputting TODO lists), use `llm.with_structured_output(SchemaModel)`. Gemini supports this via LangChain — test it early in Phase 1 since reliability is the main risk vs Claude.
+
+## MongoDB patterns
+
+- Use `motor` for async access. Connection lives in `db.py` as a module-level singleton.
+- Always pass `user_id` as a filter on memory queries. Never run an unfiltered vector search.
+- Use `update_one({"_id": ...}, {"$set": {...}})` for status transitions on todos. Don't replace whole documents.
+- For todo updates, also set `updated_at: datetime.utcnow()`. The UI uses this to detect stale data.
+- Indexes on `todos.trip_id`, `messages.trip_id`, `memory_facts.user_id`. Create these in `seed.py`.
+
+## Vector search invariants
+
+When calling `$vectorSearch`:
+
+- **Always** include `"filter": {"user_id": user_id}`.
+- **Always** set `numCandidates` to ~10x your `limit`. Equal values silently kill recall.
+- **Always** specify `input_type` to Voyage: `"query"` for searches, `"document"` for stored facts.
+- Index name is `memory_vector_index`. Define it as a constant in `db.py`.
+
+## Error handling
+
+- Wrap external API calls (LLM, Voyage) in `try/except` with an 8-second `asyncio.wait_for` timeout. A specialist that times out should mark its todo `failed` with a user-friendly message, not raise.
+- Never let an agent failure crash the turn. The synthesizer should produce a reply even if 1 of 3 specialists failed.
+- Log errors but don't expose stack traces to API responses. Return `{"error": "human-readable message"}`.
+
+## Environment variables
+
+All env vars through `config.py` using Pydantic Settings. No scattered `os.environ[...]`.
+
+Required: `MONGODB_URI`, `MONGODB_DB`, `VOYAGE_API_KEY`, `GOOGLE_API_KEY`. Phase 2 adds `LIVEKIT_*` and `ELEVENLABS_*`.
+
+## What NOT to add
+
+- ❌ SQLAlchemy, Alembic, any ORM. Document-native.
+- ❌ Celery, RQ, task queues. `asyncio.create_task` is enough.
+- ❌ Redis. Mongo is sufficient.
+- ❌ Pytest fixtures. Smoke tests in `if __name__ == "__main__"` blocks only.
+- ❌ Authentication / JWT / OAuth. Hardcode user `alex`.
+- ❌ Amadeus, Google Places, Skyscanner API integration. Hardcoded JSON in `agents/data/`.
+- ❌ Anthropic, OpenAI fallback. Commit to Gemini.
+- ❌ LangSmith setup. Use `print` for debugging.

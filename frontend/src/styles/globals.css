@@ -1,0 +1,180 @@
+/* ============================================================
+   via · global styles · soft-brutalist
+   ============================================================ */
+
+:root {
+  /* palette */
+  --paper: #f4f1e8;
+  --paper-warm: #ede8d8;
+  --paper-soft: #faf8f1;
+  --soft-green: #c8e089;
+  --accent: #9bc555;
+  --accent-deep: #6b9838;
+  --plane-top: #b8d97a;
+  --ink: #1f2818;
+  --ink-muted: #3a4526;
+  --sage: #5a6448;
+  --sage-light: #8a9275;
+
+  /* status colors for todos */
+  --status-pending: #8a9275;
+  --status-running: #d18a3d;
+  --status-needs-user: #c95d3d;
+  --status-done: #6b9838;
+  --status-failed: #b04444;
+
+  /* type */
+  --font-display: "Playfair Display", Georgia, "Times New Roman", serif;
+  --font-body: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
+
+  /* surfaces */
+  --shadow-offset: 4px;
+  --shadow-offset-sm: 3px;
+  --radius: 12px;
+  --radius-lg: 20px;
+  --radius-pill: 100px;
+  --border: 1.5px solid var(--ink);
+  --border-thin: 1px solid var(--ink);
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html,
+body {
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--font-body);
+  font-size: 16px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* paper grain overlay */
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 1;
+  opacity: 0.35;
+  mix-blend-mode: multiply;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='200' height='200'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 0.12 0 0 0 0 0.16 0 0 0 0 0.09 0 0 0 0.06 0'/></filter><rect width='100%25' height='100%25' filter='url(%23n)'/></svg>");
+}
+
+::selection {
+  background: var(--accent);
+  color: var(--ink);
+}
+
+h1, h2, h3, h4 {
+  font-family: var(--font-display);
+  font-weight: 500;
+  letter-spacing: -0.03em;
+  color: var(--ink);
+}
+
+h1 {
+  font-size: clamp(2.75rem, 6vw, 4.75rem);
+  line-height: 1.02;
+  letter-spacing: -0.04em;
+}
+
+h2 {
+  font-size: clamp(2rem, 3.5vw, 2.75rem);
+  line-height: 1.08;
+  letter-spacing: -0.035em;
+}
+
+h3 {
+  font-size: clamp(1.25rem, 2vw, 1.5rem);
+  letter-spacing: -0.02em;
+}
+
+p { color: var(--ink-muted); line-height: 1.6; }
+em { font-style: italic; }
+a { color: inherit; text-decoration: none; }
+
+button, input, textarea {
+  font-family: inherit;
+  font-size: inherit;
+  border: none;
+  background: none;
+  color: inherit;
+}
+button { cursor: pointer; }
+input:focus, textarea:focus { outline: none; }
+
+/* utilities */
+.label {
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--sage);
+  font-weight: 500;
+}
+
+.mono { font-family: var(--font-mono); }
+
+.container {
+  width: 100%;
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0 32px;
+  position: relative;
+  z-index: 2;
+}
+
+@media (max-width: 640px) {
+  .container { padding: 0 20px; }
+}
+
+.btn-primary {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--accent);
+  color: var(--ink);
+  font-size: 14px;
+  font-weight: 500;
+  padding: 12px 22px;
+  border-radius: var(--radius-pill);
+  border: var(--border);
+  box-shadow: var(--shadow-offset-sm) var(--shadow-offset-sm) 0 var(--ink);
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+  font-family: var(--font-body);
+}
+.btn-primary:hover {
+  transform: translate(-2px, -2px);
+  box-shadow: 5px 5px 0 var(--ink);
+}
+.btn-primary:active {
+  transform: translate(0, 0);
+  box-shadow: 1px 1px 0 var(--ink);
+}
+
+.btn-ghost {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 14px;
+  color: var(--ink);
+  text-decoration: underline;
+  text-underline-offset: 4px;
+  text-decoration-thickness: 1px;
+  padding: 12px 14px;
+  transition: color 0.15s ease;
+}
+.btn-ghost:hover { color: var(--accent-deep); }
+
+@keyframes fade-in-up {
+  from { opacity: 0; transform: translateY(12px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.reveal { animation: fade-in-up 0.6s cubic-bezier(0.2, 0.8, 0.2, 1) backwards; }

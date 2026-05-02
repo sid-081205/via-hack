@@ -1,0 +1,219 @@
+.hiw-header {
+  padding: 48px 0 64px;
+  position: relative;
+  z-index: 2;
+  max-width: 760px;
+}
+
+.hiw-title { margin: 16px 0 28px; }
+
+.hiw-lede {
+  font-size: 18px;
+  line-height: 1.55;
+  color: var(--ink-muted);
+  max-width: 640px;
+}
+
+/* steps */
+.hiw-steps {
+  padding: 32px 0 96px;
+  border-top: 1px dashed rgba(31, 40, 24, 0.25);
+  position: relative;
+  z-index: 2;
+}
+
+.hiw-step {
+  display: grid;
+  grid-template-columns: 120px 1fr;
+  gap: 32px;
+  padding: 40px 0;
+  border-bottom: 1px dashed rgba(31, 40, 24, 0.2);
+  align-items: start;
+}
+
+.hiw-step:last-child { border-bottom: none; }
+
+@media (max-width: 720px) {
+  .hiw-step {
+    grid-template-columns: 1fr;
+    gap: 12px;
+    padding: 32px 0;
+  }
+}
+
+.hiw-step__left {
+  position: sticky;
+  top: 20px;
+}
+
+.hiw-step__num {
+  display: inline-block;
+  font-family: var(--font-display);
+  font-size: 56px;
+  font-weight: 500;
+  color: var(--accent-deep);
+  letter-spacing: -0.04em;
+  line-height: 1;
+}
+
+@media (max-width: 720px) {
+  .hiw-step__num { font-size: 36px; }
+}
+
+.hiw-step__right { max-width: 720px; }
+
+.hiw-step__title {
+  font-size: clamp(1.5rem, 2.5vw, 2rem);
+  margin-bottom: 14px;
+  letter-spacing: -0.02em;
+}
+
+.hiw-step__body {
+  font-size: 16px;
+  line-height: 1.6;
+  color: var(--ink-muted);
+}
+
+.hiw-step__note {
+  margin-top: 14px;
+  font-size: 14px;
+  color: var(--sage);
+  font-style: italic;
+}
+
+.hiw-step__visual { margin-top: 24px; }
+
+/* todos visual */
+.hiw-todos {
+  background: #fff;
+  border: var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-offset-sm) var(--shadow-offset-sm) 0 var(--ink);
+  padding: 16px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.hiw-todo {
+  display: grid;
+  grid-template-columns: 20px 80px 1fr;
+  gap: 12px;
+  align-items: center;
+  font-size: 13.5px;
+  padding: 6px 0;
+}
+
+.hiw-todo__status {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: 500;
+  color: #fff;
+}
+
+.hiw-todo__status--running {
+  background: var(--status-running);
+  animation: pulse 1.4s ease-in-out infinite;
+}
+
+.hiw-todo__status--done { background: var(--status-done); }
+
+.hiw-todo__tag {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--accent-deep);
+}
+
+.hiw-todo__text {
+  color: var(--ink);
+}
+
+/* architecture */
+.hiw-arch {
+  padding: 80px 0;
+  border-top: 1px dashed rgba(31, 40, 24, 0.25);
+  position: relative;
+  z-index: 2;
+}
+
+.hiw-arch__title { margin: 12px 0 18px; max-width: 720px; }
+
+.hiw-arch__body {
+  font-size: 17px;
+  line-height: 1.6;
+  color: var(--ink-muted);
+  max-width: 680px;
+  margin-bottom: 36px;
+}
+
+.hiw-arch__grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+}
+
+@media (max-width: 720px) {
+  .hiw-arch__grid { grid-template-columns: 1fr; }
+}
+
+.hiw-arch__pill {
+  background: #fff;
+  border: var(--border-thin);
+  border-radius: var(--radius);
+  padding: 14px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.hiw-arch__pill:hover {
+  transform: translate(-2px, -2px);
+  box-shadow: 4px 4px 0 var(--ink);
+}
+
+.hiw-arch__pill--accent { background: var(--soft-green); }
+
+.hiw-arch__label {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  color: var(--ink);
+}
+
+.hiw-arch__desc {
+  font-size: 13px;
+  color: var(--ink-muted);
+  line-height: 1.4;
+}
+
+/* cta */
+.hiw-cta {
+  padding: 88px 0 64px;
+  border-top: 1px dashed rgba(31, 40, 24, 0.25);
+  position: relative;
+  z-index: 2;
+  text-align: center;
+}
+
+.hiw-cta__title {
+  font-size: clamp(2rem, 4vw, 3rem);
+  margin-bottom: 16px;
+}
+
+.hiw-cta__body {
+  font-size: 16px;
+  color: var(--ink-muted);
+  margin-bottom: 32px;
+  max-width: 520px;
+  margin-left: auto;
+  margin-right: auto;
+}

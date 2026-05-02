@@ -1,0 +1,119 @@
+---
+description: LiveKit voice + phone integration (Phase 2 and 3)
+globs: backend/app/voice/**/*.py,frontend/components/voice-*.tsx
+alwaysApply: false
+---
+
+# Voice / LiveKit rules
+
+**Phase gating:** Do not implement voice until Phase 1 (text chat + multi-agent + todos + booking handoff) is fully working end-to-end. If Phase 1 isn't done, refuse and remind the user.
+
+## Architecture
+
+```
+Browser (LiveKit React SDK)        Phone caller (PSTN)
+       ↓                                    ↓
+   LiveKit Cloud room        ←──    LiveKit Phone Numbers
+       ↓                                    ↓
+              LiveKit Agents (Python, on AWS)
+              ─ STT: LiveKit's bundled default (Whisper or built-in)
+              ─ Same orchestrator (`process_user_turn`) used by /messages
+              ─ TTS: ElevenLabs
+                       ↓
+                  MongoDB Atlas
+```
+
+**One agent codepath, two entry points.** Web user joining a room and phone caller dialing the number both end up in the same `entrypoint(ctx)` function.
+
+## Stack — pinned
+
+```
+livekit-agents
+livekit-plugins-elevenlabs
+livekit-plugins-google         # Gemini for the LLM in voice mode
+```
+
+Use the `AgentSession` pattern from current LiveKit docs. For STT, use whatever LiveKit's default starter ships with — don't add a separate STT vendor. Keeps signups minimal.
+
+## Latency rules — non-negotiable
+
+Voice agents have latency budgets. Specialist tool calls take 5–10 seconds; that's an eternity on a phone call.
+
+- **Always emit a filler phrase immediately.** As soon as the user finishes speaking, the agent says "let me check that for you" before any tool runs. Use `session.generate_reply()` for the filler, then run heavy work, then a second reply.
+- **Run specialists in parallel** (`asyncio.gather`).
+- **Stream the final reply.** Don't wait for full LLM response before TTS starts.
+- **Never block on memory extraction.** `asyncio.create_task(extract_memory(...))` after reply.
+
+## Web entry point (Phase 2)
+
+Frontend gets a token from `POST /livekit/token`, joins a room. Agent dispatched to that room.
+
+```ts
+// frontend/components/voice-button.tsx
+"use client";
+import { LiveKitRoom, RoomAudioRenderer } from "@livekit/components-react";
+
+export function VoiceButton({ tripId }: { tripId: string }) {
+  const [token, setToken] = useState<string | null>(null);
+  // fetch token from /livekit/token, render LiveKitRoom when present
+}
+```
+
+Token endpoint hardcodes user as `alex`. Room name = trip ID.
+
+## Phone entry point (Phase 3)
+
+LiveKit Phone Numbers gives a US number, configured via dashboard. Not Twilio/Telnyx.
+
+- Buy the number FIRST when starting Phase 3. Provisioning takes minutes.
+- Inbound dispatch rule routing all calls to a room with `agent_name="via-agent"`.
+- **Explicit dispatch** — give the agent a name. Don't rely on automatic dispatch for telephony.
+- Hardcode the phone caller's identity as `alex` for the demo.
+
+## Same-agent pattern
+
+```python
+async def entrypoint(ctx: JobContext):
+    is_phone = ctx.room.name.startswith("call-")
+    user_id = "alex"
+
+    session = AgentSession(
+        # STT: use LiveKit default
+        llm=google.LLM(model="gemini-2.5-flash"),
+        tts=elevenlabs.TTS(voice=os.environ["ELEVENLABS_VOICE_ID"]),
+    )
+
+    if is_phone:
+        greeting = "Hi, you've reached Via. What can I help with?"
+    else:
+        greeting = f"Hi Alex, what's on for the Lisbon trip?"
+
+    # wire up to the same planner that handles text
+```
+
+## Conversation routing
+
+Whatever the planner does for text, it must do for voice. Don't fork two implementations. The voice agent calls the same `process_user_turn(user_id, trip_id, text)` (or thin wrapper) as `/messages`.
+
+Clean pattern: implement `process_user_turn(...) -> assistant_text` once in `agents/orchestrator.py`, used by both the FastAPI route and the LiveKit voice agent.
+
+## Hard fallback rule
+
+If at the start of Phase 3 the phone setup hits trouble, **cap effort at 90 minutes**. After 90 minutes of phone debugging, kill it and put everyone on demo polish + recording the backup video. Phase 1 + Phase 2 alone is a complete demoable product.
+
+## ElevenLabs — bonus prize hook
+
+Use ElevenLabs for TTS specifically. Reasons:
+- Sounds noticeably better than alternatives in demo conditions.
+- Submitting to showcase.elevenlabs.io after the event qualifies for "Best Project Built with ElevenLabs" prize ($1980/team member, 6 months Scale tier).
+- Use the coupon code from your hackathon registration email to activate Creator tier.
+
+## What NOT to do
+
+- ❌ Build voice before Phase 1 is solid.
+- ❌ Twilio/Telnyx SIP trunks. LiveKit Phone Numbers is faster setup.
+- ❌ UK phone number. LiveKit free tier is US numbers; judges dial +1 for free on smartphones.
+- ❌ Fork agent logic between voice and text. One planner, two entry points.
+- ❌ Skip the filler phrase. Without it, the demo feels broken even when it works.
+- ❌ Block voice replies on memory extraction. Always background-task it.
+- ❌ Add Deepgram. Use LiveKit's bundled STT.

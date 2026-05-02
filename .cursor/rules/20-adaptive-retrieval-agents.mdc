@@ -1,0 +1,170 @@
+---
+description: Adaptive retrieval + multi-agent orchestration (no graph framework)
+globs: backend/app/agents/**/*.py
+alwaysApply: false
+---
+
+# Adaptive retrieval + agent orchestration
+
+Via’s judging story centers on **agentic, adaptive retrieval**: the system actively chooses *how* to query multiple sources, adjusts chunking and candidate counts, merges heterogeneous results, and reorders them based on the user’s message and planner intent — then reasons across those contexts. Orchestration is plain **async Python** (FastAPI-callable pipeline), not a graph DSL.
+
+## Pipeline shape
+
+```
+START (process_user_turn)
+  ↓
+adaptive_retrieve    ← multi-source retrieval (see below)
+  ↓
+planner              ← Gemini decides what to do, writes TODOs to Mongo
+  ↓
+[parallel]
+  ├─ flight_agent
+  ├─ stay_agent
+  └─ itinerary_agent     ← each uses retrieval-aware tools + hardcoded JSON
+  ↓ (join via asyncio.gather)
+synthesize           ← composes user-facing chat reply
+  ↓
+extract_memory       ← background task: new facts → embed → memory_facts
+  ↓
+END
+```
+
+Run specialists with **`asyncio.gather`**. Do NOT call them sequentially — that defeats the multi-agent demo.
+
+## Adaptive retrieval — required behavior
+
+Implement retrieval in a dedicated module (e.g. `agents/retrieval.py`) invoked at the start of every turn. It must combine **several resource types** and **adapt** based on input:
+
+| Source | Role |
+|--------|------|
+| **`memory_facts`** | Atlas Vector Search; optional multi-query (rewrite original user text into 1–3 retrieval queries via LLM when helpful). |
+| **`trips` / `messages`** | Structured slices: recent messages, current trip summary fields — fetched with explicit projections, not whole-document dumps. |
+| **`agents/data/*.json`** | Specialist corpora; retrieval chooses record-level vs field-level exposure (what gets passed to ranking vs prompt). |
+
+**Adaptive knobs** (planner or retrieval layer adjusts these — not fixed constants everywhere):
+
+- Query formulation: single embedding vs multi-query vs extracted entities/dates from the user message.
+- Vector stage: `limit`, `numCandidates`, and optional filters (always keep `user_id` on memory).
+- Chunking / shaping: how much of each hotel/restaurant/flight record enters context (full row vs description-only vs bullet summary).
+- Fusion / ordering: merge hits from sources, dedupe, then **rerank** with a cheap deterministic score (e.g. vector score + recency) and/or a short LLM pass that outputs an ordered list of “what matters this turn.”
+
+Specialists consume the **packaged retrieval context** (`memory_context`, `trip_context`, `corpus_hints`) rather than re-querying blindly without coordination.
+
+## Retrieval feedback — improves over time
+
+Persist which memory facts actually shaped each todo (e.g. `memory_facts_used` on the todo doc) so the UI can show “what fired”; together with `extract_memory`, the indexed corpus grows every turn so later vector pulls naturally surface richer matches — and you keep a hook to nudge query reformulation or reranking toward historically high-signal facts without new collections.
+
+## State schema
+
+Define once (e.g. `agents/orchestrator.py` or `agents/state.py`):
+
+```python
+from typing import TypedDict, NotRequired
+
+class ViaState(TypedDict):
+    user_id: str
+    trip_id: str
+    messages: list  # LangChain BaseMessage or minimal dicts — no graph reducer required
+    retrieval: dict  # structured output from adaptive_retrieve
+    memory_context: list[str]
+    todos: list[dict]
+    specialist_results: dict
+```
+
+Don’t add fields unless a step reads them.
+
+## Persistence — no graph checkpointer
+
+Short-term continuity comes from **MongoDB**: append to `messages`, read recent window + trip fields inside `adaptive_retrieve`. Long-term memory remains **`memory_facts`** + extraction loop. Do not add a graph-framework checkpointer dependency for this.
+
+## Planner node rules
+
+- Output **structured data** via Pydantic, not freeform text. Use `llm.with_structured_output(PlannerOutput)`.
+- Test Gemini’s structured output reliability early in Phase 1. If malformed JSON > 10% of calls, add a retry with stricter prompt.
+- Write resulting todos to MongoDB as part of the planner step, not as an invisible side effect.
+- Output both a `chat_reply` (warm acknowledgment) and a `todos` list.
+
+```python
+class Todo(BaseModel):
+    text: str
+    agent: Literal["FlightAgent", "StayAgent", "ItineraryAgent"]
+
+class PlannerOutput(BaseModel):
+    chat_reply: str = Field(description="Warm, brief acknowledgment for the user")
+    todos: list[Todo]
+```
+
+## Specialist node rules
+
+Same as before: read assigned todos, mark `running` in Mongo, rank against hardcoded JSON using prefs from **retrieval pack**, update todo to `needs_user` / `done`, return into `specialist_results`.
+
+Specialists must NEVER:
+
+- Invent confirmation numbers.
+- Call each other directly.
+- Block on a tool call without 8s timeout.
+- Skip the `running` status update — the live UI depends on it.
+
+## Tool functions
+
+```
+tools/
+  flight_search.py
+  stay_search.py
+  places_search.py
+  memory.py            # search_memory, store_memory, extract_facts
+```
+
+Each tool: standalone async function (not a class), returns Pydantic models, has a 1-line docstring usable as the LLM tool description, includes a smoke test.
+
+## Memory search — critical patterns
+
+```python
+async def search_memory(user_id: str, query: str, k: int = 5) -> list[str]:
+    """Returns top-k memory facts for this user, ranked by semantic similarity."""
+    query_vec = await voyage_embed(query, input_type="query")
+    pipeline = [
+        {
+            "$vectorSearch": {
+                "index": "memory_vector_index",
+                "path": "embedding",
+                "queryVector": query_vec,
+                "numCandidates": k * 10,
+                "limit": k,
+                "filter": {"user_id": user_id},
+            }
+        },
+        {"$project": {"fact": 1, "score": {"$meta": "vectorSearchScore"}}},
+    ]
+    return [doc["fact"] async for doc in db.memory_facts.aggregate(pipeline)]
+```
+
+Invariants:
+
+1. `numCandidates >= 10 * limit`
+2. `filter` is always present on memory vector search
+3. `input_type="query"` for searches, `input_type="document"` for stored facts
+
+## Memory extraction (evolution loop)
+
+After synthesis, run `extract_memory` as a background task (`asyncio.create_task`). Don’t block the user reply. Next turn’s retrieval picks up new facts.
+
+## Common mistakes to avoid
+
+- ❌ `pymongo.MongoClient` (sync) in async code. Use `motor`.
+- ❌ Sequential specialists. Use `asyncio.gather`.
+- ❌ Stuffing the entire trip JSON into every prompt. Pass only what retrieval selected.
+- ❌ Unstructured LLM output parsed with regex. Use `with_structured_output`.
+- ❌ Fixed retrieval parameters for every query. Adapt `k`, queries, and chunk shape to intent.
+- ❌ Forgetting `$set: {updated_at: now}` on todo updates.
+
+## Checklist when generating new agent code
+
+1. Single, named responsibility?
+2. Touches Mongo? Using motor (async)?
+3. Calls LLM? Via `ainvoke` with structured output?
+4. Writes a todo? Sets status, sub_status, AND updated_at?
+5. Has a timeout on external calls?
+6. Retrieval step composes multiple sources before the planner runs?
+
+If any "no", fix before writing code.

@@ -78,6 +78,61 @@
   min-height: 0;
 }
 
+.trip__agents-empty {
+  margin: auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 6px;
+  padding: 18px 12px;
+  color: var(--sage);
+}
+
+.trip__agents-empty-icon {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background: var(--paper-warm);
+  border: 1px dashed rgba(31, 40, 24, 0.35);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--sage);
+  margin-bottom: 2px;
+}
+
+.trip__agents-empty-text {
+  font-size: 12.5px;
+  color: var(--ink-muted);
+  line-height: 1.4;
+}
+
+.trip__agents-empty-hint {
+  font-size: 11px;
+  color: var(--sage);
+  font-style: italic;
+}
+
+.trip__meta--placeholder {
+  color: var(--sage-light);
+  font-style: italic;
+}
+
+.trip__header-text {
+  min-width: 0;
+}
+
+/* plan empty state */
+.plan-empty {
+  margin: auto 0;
+  padding: 12px 4px;
+  color: var(--sage);
+  font-size: 12px;
+  font-style: italic;
+  line-height: 1.45;
+}
+
 .agent-card {
   background: #fff;
   border: 1.5px solid var(--ink);
@@ -147,7 +202,12 @@
   height: 5px;
   border-radius: 50%;
   background: var(--status-color);
-  animation: pulse 1.2s ease-in-out infinite;
+  animation: agent-pulse 1.2s ease-in-out infinite;
+}
+
+@keyframes agent-pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.45; transform: scale(0.85); }
 }
 
 .agent-card__title {
@@ -164,7 +224,34 @@
   font-size: 12px;
   color: var(--ink-muted);
   line-height: 1.35;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
 }
+
+.agent-card__dots {
+  display: inline-flex;
+  gap: 2px;
+  margin-left: 2px;
+}
+
+.agent-card__dots span {
+  display: inline-block;
+  width: 3px;
+  height: 3px;
+  border-radius: 50%;
+  background: var(--status-running);
+  animation: agent-dot 1.2s infinite ease-in-out both;
+}
+
+.agent-card__dots span:nth-child(1) { animation-delay: -0.32s; }
+.agent-card__dots span:nth-child(2) { animation-delay: -0.16s; }
+
+@keyframes agent-dot {
+  0%, 80%, 100% { opacity: 0.2; transform: scale(0.7); }
+  40% { opacity: 1; transform: scale(1); }
+}
+
 
 .agent-card__memory {
   display: inline-flex;

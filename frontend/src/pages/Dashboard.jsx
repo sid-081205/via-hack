@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { Settings as SettingsIcon } from "lucide-react";
 import Logo from "../components/Logo.jsx";
@@ -6,19 +6,14 @@ import ChatPanel from "../components/dashboard/ChatPanel.jsx";
 import TripWorkspace from "../components/dashboard/TripWorkspace.jsx";
 import BookingPane from "../components/dashboard/BookingPane.jsx";
 import SettingsPanel from "../components/dashboard/SettingsPanel.jsx";
-import {
-  getTrip,
-  getTodos,
-  getMessages,
-  sendMessage,
-  confirmTodo,
-} from "../lib/api.js";
+import { sendMessage, confirmTodo } from "../lib/api.js";
+import { runDemoStep } from "../lib/demoScript.js";
 import "./Dashboard.css";
 
 const TRIP_ID = import.meta.env.VITE_DEMO_TRIP_ID || "trip_lisbon";
 const USER_ID = "alex";
 
-const FALLBACK_USER = {
+const DEFAULT_USER = {
   _id: USER_ID,
   name: "Alex Morgan",
   home_city: "London, UK",
@@ -41,10 +36,12 @@ const FALLBACK_USER = {
   },
 };
 
-const FALLBACK_TRIP = {
+// Empty stub trip — the dashboard starts blank and fills up as the
+// scripted demo (or real agents) drive it.
+const makeEmptyTrip = () => ({
   _id: TRIP_ID,
   user_id: USER_ID,
-  destination: "—",
+  destination: null,
   start_date: null,
   end_date: null,
   travelers: null,
@@ -54,109 +51,143 @@ const FALLBACK_TRIP = {
   stays: [],
   itinerary: [],
   trip_documents: [],
-};
+});
 
 /**
- * Dashboard — 3-column layout wired to the FastAPI backend.
+ * Dashboard — 3-column layout driven primarily by the scripted demo
+ * engine in `lib/demoScript.js`. The real backend is a fallback for
+ * messages that don't match any scripted trigger.
  *
  *   [ trip workspace ] [ chat ] [ booking pane ]
  *
- * Data flow:
- *   - Initial mount: parallel GET trip + todos + messages.
- *   - Polling: GET todos every 2s while mounted (the agentic UX).
- *   - On user send: optimistic user bubble → POST → append reply → refetch
- *     trip + todos (a specialist may have updated trip.flights / stays / etc).
- *   - On "I booked it": find todo whose result.booking_url matches the
- *     pending booking, POST /todos/:id/confirm, refetch trip + todos.
- *
- * Settings save is local-only for now — there is no PATCH /users/:id yet.
- * The memory strip in ChatPanel is rendered with an empty list (no
- * /users/:id/memory endpoint in Phase 1).
+ * The dashboard never auto-fetches state on mount — every demo opens
+ * with an empty chat, no live agents, and no trip details. This makes
+ * the 90-second demo flow deterministic and replayable.
  */
 export default function Dashboard() {
-  const [user, setUser] = useState(FALLBACK_USER);
-  const [trip, setTrip] = useState(FALLBACK_TRIP);
+  const [user, setUser] = useState(DEFAULT_USER);
+  const [trip, setTrip] = useState(makeEmptyTrip);
   const [todos, setTodos] = useState([]);
   const [messages, setMessages] = useState([]);
-  const [memoryFacts] = useState([]); // memory feature out of scope for phase 1
+  const [memoryFacts] = useState([]);
   const [pendingBooking, setPendingBooking] = useState(null);
   const [confirmedBookings, setConfirmedBookings] = useState([]);
   const [activeTab, setActiveTab] = useState("chat");
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const [loadError, setLoadError] = useState(null);
 
+  // refs hold latest snapshots so the async action runner sees current state
+  // even when multiple scenes are draining concurrently (parallel agents).
+  const tripRef = useRef(trip);
+  tripRef.current = trip;
   const todosRef = useRef(todos);
   todosRef.current = todos;
 
-  // initial load
-  useEffect(() => {
-    let cancelled = false;
-    Promise.all([
-      getTrip(TRIP_ID).catch((e) => { console.error("getTrip", e); return null; }),
-      getTodos(TRIP_ID).catch((e) => { console.error("getTodos", e); return []; }),
-      getMessages(TRIP_ID).catch((e) => { console.error("getMessages", e); return []; }),
-    ]).then(([t, td, m]) => {
-      if (cancelled) return;
-      if (t) setTrip(t);
-      else setLoadError("could not reach the api — is the backend running on :8000?");
-      setTodos(td || []);
-      setMessages(m || []);
-    });
-    return () => { cancelled = true; };
-  }, []);
-
-  // poll todos every 2s — the live UI is the demo
-  useEffect(() => {
-    const id = setInterval(() => {
-      getTodos(TRIP_ID)
-        .then(setTodos)
-        .catch((e) => console.error("poll todos", e));
-    }, 2000);
-    return () => clearInterval(id);
-  }, []);
-
-  const refreshTripAndTodos = async () => {
-    try {
-      const [t, td] = await Promise.all([getTrip(TRIP_ID), getTodos(TRIP_ID)]);
-      if (t) setTrip(t);
-      setTodos(td || []);
-    } catch (e) {
-      console.error("refreshTripAndTodos", e);
+  // ── action execution ──────────────────────────────────────────────────────
+  const applyAction = (action) => {
+    switch (action.type) {
+      case "append_message":
+        setMessages((prev) => [...prev, action.message]);
+        break;
+      case "add_todo":
+        setTodos((prev) =>
+          prev.some((t) => t._id === action.todo._id)
+            ? prev
+            : [...prev, action.todo]
+        );
+        break;
+      case "update_todo":
+        setTodos((prev) =>
+          prev.map((t) =>
+            t._id === action.id ? { ...t, ...action.patch } : t
+          )
+        );
+        break;
+      case "set_trip_field":
+        setTrip((prev) => ({ ...prev, [action.field]: action.value }));
+        break;
+      case "append_trip_array": {
+        const value = Array.isArray(action.value) ? action.value : [action.value];
+        setTrip((prev) => ({
+          ...prev,
+          [action.field]: [...(prev[action.field] || []), ...value],
+        }));
+        break;
+      }
+      default:
+        console.warn("unknown demo action", action);
     }
   };
 
+  const executeActions = async (actions) => {
+    for (const action of actions) {
+      if (action.delay > 0) {
+        await new Promise((r) => setTimeout(r, action.delay));
+      }
+      applyAction(action);
+    }
+  };
+
+  // ── send handler — demo engine first, real backend fallback ───────────────
   const handleSend = async (text) => {
+    const trimmed = (text || "").trim();
+    if (!trimmed) return;
+
     const userMsg = {
-      _id: `m-${Date.now()}`,
+      _id: `m-${Date.now()}-u`,
       role: "user",
-      content: text,
+      content: trimmed,
       created_at: new Date().toISOString(),
     };
     setMessages((m) => [...m, userMsg]);
 
+    // primary path — scripted demo
+    const step = runDemoStep(trimmed, {
+      trip: tripRef.current,
+      todos: todosRef.current,
+      messages,
+    });
+
+    if (step.matched) {
+      // fire-and-forget — multiple scenes can drain in parallel
+      executeActions(step.actions).catch((e) =>
+        console.error("demo executeActions", e)
+      );
+      return;
+    }
+
+    // fallback — real backend
     try {
-      const resp = await sendMessage(TRIP_ID, text, USER_ID);
-      const reply = resp?.reply || "(no reply)";
-      const agentMsg = {
-        _id: `m-${Date.now()}-r`,
-        role: "agent",
-        content: reply,
-        created_at: new Date().toISOString(),
-      };
-      setMessages((m) => [...m, agentMsg]);
-      await refreshTripAndTodos();
+      const resp = await Promise.race([
+        sendMessage(TRIP_ID, trimmed, USER_ID),
+        new Promise((_, reject) =>
+          setTimeout(() => reject(new Error("timeout")), 8000)
+        ),
+      ]);
+      const reply = resp?.reply || "let me think on that.";
+      setMessages((m) => [
+        ...m,
+        {
+          _id: `m-${Date.now()}-r`,
+          role: "agent",
+          content: reply,
+          created_at: new Date().toISOString(),
+        },
+      ]);
     } catch (e) {
-      console.error("sendMessage", e);
-      const errMsg = {
-        _id: `m-${Date.now()}-e`,
-        role: "agent",
-        content: "sorry, something broke. try again?",
-        created_at: new Date().toISOString(),
-      };
-      setMessages((m) => [...m, errMsg]);
+      console.warn("backend fallback failed", e);
+      setMessages((m) => [
+        ...m,
+        {
+          _id: `m-${Date.now()}-e`,
+          role: "agent",
+          content: "let me think on that.",
+          created_at: new Date().toISOString(),
+        },
+      ]);
     }
   };
 
+  // ── booking handlers ──────────────────────────────────────────────────────
   const handleOpenBooking = (item, kind) => {
     setPendingBooking({ ...item, kind });
     setActiveTab("booking");
@@ -169,7 +200,6 @@ export default function Dashboard() {
     ]);
     setPendingBooking(null);
 
-    // find the todo whose result.booking_url matches this item, confirm it
     const todo = todosRef.current.find((t) => {
       if (!t.result) return false;
       if (item.booking_url && t.result.booking_url === item.booking_url) return true;
@@ -177,21 +207,29 @@ export default function Dashboard() {
       return false;
     });
 
-    try {
-      if (todo?._id) {
+    if (todo?._id) {
+      try {
         await confirmTodo(todo._id);
+      } catch (e) {
+        // backend offline during demo — ignore
+        console.warn("confirmTodo (likely offline)", e);
       }
-    } catch (e) {
-      console.error("confirmTodo", e);
-    } finally {
-      await refreshTripAndTodos();
     }
   };
 
-  const handleSaveSettings = (updated) => {
-    // local-only — no PATCH /users/:id endpoint in phase 1
-    setUser(updated);
+  const handleSaveSettings = (updated) => setUser(updated);
+
+  const handleResetDemo = () => {
+    setTrip(makeEmptyTrip());
+    setTodos([]);
+    setMessages([]);
+    setPendingBooking(null);
+    setConfirmedBookings([]);
+    setActiveTab("chat");
   };
+
+  const tripTitle = trip.destination || "untitled trip";
+  const tripDates = formatDates(trip.start_date, trip.end_date);
 
   return (
     <div className="dash">
@@ -203,10 +241,14 @@ export default function Dashboard() {
             </Link>
             <span className="dash-header__divider">/</span>
             <span className="dash-header__trip-name">
-              {trip.destination} ·{" "}
-              <span className="dash-header__dates">
-                {formatDates(trip.start_date, trip.end_date)}
-              </span>
+              {tripTitle}
+              {tripDates && (
+                <>
+                  {" "}
+                  ·{" "}
+                  <span className="dash-header__dates">{tripDates}</span>
+                </>
+              )}
             </span>
           </div>
 
@@ -228,18 +270,6 @@ export default function Dashboard() {
             </button>
           </div>
         </div>
-        {loadError && (
-          <div className="dash-header__error" style={{
-            padding: "8px 16px",
-            fontSize: 12,
-            color: "var(--ink-muted, #3a4526)",
-            background: "rgba(225, 106, 78, 0.08)",
-            borderTop: "1px solid rgba(31, 40, 24, 0.1)",
-            fontFamily: "monospace",
-          }}>
-            {loadError}
-          </div>
-        )}
       </header>
 
       {/* mobile tab bar */}
@@ -261,7 +291,6 @@ export default function Dashboard() {
         </button>
       </div>
 
-      {/* 3-column layout · trip · chat · booking */}
       <main className="dash-main">
         <section
           className={`dash-col dash-col--trip ${activeTab === "trip" ? "dash-col--active" : ""}`}
@@ -303,6 +332,7 @@ export default function Dashboard() {
         onClose={() => setSettingsOpen(false)}
         user={user}
         onSave={handleSaveSettings}
+        onResetDemo={handleResetDemo}
       />
     </div>
   );

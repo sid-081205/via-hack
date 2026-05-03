@@ -1,6 +1,16 @@
 import { motion, AnimatePresence } from "framer-motion";
 import { useState, useEffect } from "react";
-import { X, MapPin, Plane, Wallet, Utensils, Bell, Shield } from "lucide-react";
+import {
+  X,
+  MapPin,
+  Plane,
+  Wallet,
+  Utensils,
+  Bell,
+  Shield,
+  RotateCcw,
+  Sparkles,
+} from "lucide-react";
 import "./SettingsPanel.css";
 
 /**
@@ -9,7 +19,7 @@ import "./SettingsPanel.css";
  * Frontend-only state for now. When the backend is wired, the save handler
  * does PATCH /users/:id with the diff. See README.md § integrations.
  */
-export default function SettingsPanel({ open, onClose, user, onSave }) {
+export default function SettingsPanel({ open, onClose, user, onSave, onResetDemo }) {
   const [draft, setDraft] = useState(user);
 
   // re-sync if the upstream user object changes
@@ -36,6 +46,11 @@ export default function SettingsPanel({ open, onClose, user, onSave }) {
 
   const handleSave = () => {
     onSave(draft);
+    onClose();
+  };
+
+  const handleResetDemo = () => {
+    onResetDemo?.();
     onClose();
   };
 
@@ -246,6 +261,23 @@ export default function SettingsPanel({ open, onClose, user, onSave }) {
                 </p>
                 <button className="settings__danger-btn">clear all memory facts</button>
                 <button className="settings__danger-btn">delete this trip</button>
+              </Group>
+
+              {/* demo controls */}
+              <Group icon={Sparkles} label="demo">
+                <div className="settings__demo-row">
+                  <button
+                    type="button"
+                    className="settings__reset-btn"
+                    onClick={handleResetDemo}
+                  >
+                    <RotateCcw size={13} />
+                    reset demo
+                  </button>
+                  <span className="settings__field-hint">
+                    Clears the chat, agents, and travel plan.
+                  </span>
+                </div>
               </Group>
             </div>
 
